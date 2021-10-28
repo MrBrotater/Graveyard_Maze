@@ -11,7 +11,6 @@ SHOW_MOUSECOORDS = False
 BG_MUSIC_VOLUME = 0.3
 
 # LEVEL PATHS -----------------------------------------------------------------------------------
-
 PATH_INPUTS = [
     (10, 370, 80, 80),
     (80, 400, 120, 20),
@@ -45,6 +44,7 @@ STEPPED_ON_TEXT = FONT_1.render('uuuuuurgh!  Stop stepping on us!', 1, WHITE)
 # USER EVENTS ---------------------------------------------------------------------------------
 LEFT_PATH = pygame.USEREVENT + 1
 START_GAME = pygame.USEREVENT + 2
+NEXT_LEVEL = pygame.USEREVENT + 3
 
 # SOUND EFFECTS --------------------------------------------------------------------------------
 HIT_SOUND = pygame.mixer.Sound(os.path.join('sound/Sound_Effects', 'hit01.wav'))
@@ -55,33 +55,23 @@ INTRO_BG_IMG = pygame.image.load(
 INTRO_BG = pygame.transform.scale(INTRO_BG_IMG, (WIDTH, HEIGHT))
 
 # DRAWING -------------------------------------------------------------------------------------------
-def draw_intro(level):
-    BG = select_background(level)
-    WIN.blit(BG, (0, 0))
-    pygame.draw.rect(WIN, RED, PATH_RECTANGLES[0])
-    WIN.blit(START_TEXT, (10, 340))
-
-    if SHOW_MOUSECOORDS:
-        coords = get_mousecoords()
-        WIN.blit(coords, (10, 10))
-
-    pygame.display.update()
-    return
-
 def draw_level(level):
     BG = select_background(level)
     WIN.blit(BG, (0, 0))
-    if level == 0:
-        WIN.blit(BG, (0, 0))
+    if level == -1:
         pygame.draw.rect(WIN, RED, PATH_RECTANGLES[0])
-        # WIN.blit(START_TEXT, (10, 340))
+        WIN.blit(START_TEXT, (10, 340))
+    elif level == 0:
+        pygame.draw.rect(WIN, RED, PATH_RECTANGLES[0])
         WIN.blit(STEPPED_ON_TEXT, (500, 500))
+    elif level == 'buffer':
+        pygame.draw.rect(WIN, RED, PATH_RECTANGLES[0])
+        WIN.blit(START_TEXT, (10, 340))
     else:
         for rect in PATH_RECTANGLES:
             pygame.draw.rect(WIN, WHITE, rect)
         pygame.draw.rect(WIN, RED, PATH_RECTANGLES[0])
         pygame.draw.rect(WIN, RED, PATH_RECTANGLES[-1])
-        # WIN.blit(START_TEXT, (10, 340))
         WIN.blit(INSTRUCTION_TEXT, (10, 40))
 
     if SHOW_MOUSECOORDS:
@@ -133,7 +123,8 @@ def select_background(level):
     bgs_by_level = {
         -1: 'intro.jpg',
         0: 'graveyard_hand.jpg',
-        1: 'graveyard3.jpg'
+        1: 'graveyard3.jpg',
+        'buffer': 'intro.jpg'
     }
     bg = pygame.image.load(
         os.path.join('assets', bgs_by_level[level]))
@@ -146,6 +137,7 @@ def main():
     clock = pygame.time.Clock()
     run = True
     level = -1
+    display_level = level
     select_background(level)
     play_bg_music()
     while run:
@@ -155,23 +147,22 @@ def main():
                 run = False
                 pygame.quit()
             if event.type == LEFT_PATH:
-                print('BRRRRRRR')
                 pygame.mixer.Sound.play(HIT_SOUND)  # todo hit sound doesn't work
                 level = 0
             if event.type == START_GAME:
+                display_level = level
                 if level == -1:
                     level += 2
                 else:
                     level += 1
-        if level == -1:
-            draw_intro(level)
+            if event.type == NEXT_LEVEL:
+                display_level = 'buffer'
+        draw_level(display_level)
+        if display_level <= 0 or 'buffer':
             check_start()
-        if level == 0:
-            draw_level(level)
-            check_start()
-        if level == 1:
-            check_collision()
-            draw_level(level)
+        if display_level >= 0:
+            check_collision()   # todo collision should only iterate level by 1
+    return
 
 if __name__ == '__main__':
     main()
