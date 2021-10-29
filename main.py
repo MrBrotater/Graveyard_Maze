@@ -11,6 +11,8 @@ pygame.display.set_caption('Graveyard Maze')
 FPS = 15
 SHOW_MOUSECOORDS = False
 BG_MUSIC_VOLUME = 0.1
+GHOST_SIZE = 125
+GHOST_SPEED = 2
 
 # COLORS --------------------------------------------------------------------------------------
 WHITE = (255, 255, 255)
@@ -37,6 +39,7 @@ STEPPED_ON_TEXTS = [FONT_2.render(x, True, WHITE) for x in ZOMBIE_TEXTS]
 LEFT_PATH = pygame.USEREVENT + 1
 START_GAME = pygame.USEREVENT + 2
 NEXT_LEVEL = pygame.USEREVENT + 3
+GHOSTED = pygame.USEREVENT + 4
 
 # BACKGROUND MUSIC -----------------------------------------------------------------------------
 
@@ -45,6 +48,8 @@ ZOMBIE_FILES = [file for file in os.listdir('sound/Sound_Effects')]
 ZOMBIE_SOUNDS = [pygame.mixer.Sound(os.path.join('sound/Sound_Effects', x)) for x in ZOMBIE_FILES]
 for sound in ZOMBIE_SOUNDS:
     sound.set_volume(BG_MUSIC_VOLUME)
+
+GHOST_LAUGH = pygame.mixer.Sound(os.path.join('sound/Sound_Effects', 'laugh-evil-1.ogg'))
 
 WIN_SOUND = pygame.mixer.Sound(os.path.join('sound/Sound_Effects', 'win.ogg'))
 WIN_SOUND.set_volume(1)
@@ -95,9 +100,67 @@ def get_level_rectangles(level):
     return rectangles
 
 
+# GHOST FRAME IMAGES --------------------------------------------------------------------------------
+GHOST_FILES = os.listdir('assets\\animated ghost')
+GHOST_FRAMES = [pygame.image.load(os.path.join('assets\\animated ghost', file)) for file in GHOST_FILES]
+
+
+# GHOST ---------------------------------------------------------------------------------------------
+class Ghost(pygame.sprite.Sprite):
+
+    def __init__(self, level):
+        pygame.sprite.Sprite.__init__(self)
+        level_x = {
+            -1: 0,
+            0: 0,
+            1: 750,
+            2: 0,
+            3: 1000
+        }
+        level_y = {
+            -1: 0,
+            0: 0,
+            1: 200,
+            2: 0,
+            3: 1000
+        }
+        level_speed = {
+            -1: 0,
+            0: 0,
+            1: 3,
+            2: 1,
+            3: 2
+        }
+
+        self.rect = pygame.Rect(level_x[level], level_y[level], GHOST_SIZE, GHOST_SIZE)
+        self.frame = 0
+        self.image = pygame.transform.scale(GHOST_FRAMES[self.frame], (GHOST_SIZE, GHOST_SIZE))
+        self.speed = level_speed[level]
+
+    def update(self):
+        target_x, target_y = pygame.mouse.get_pos()
+        ghost_x, ghost_y = self.rect.centerx, self.rect.centery
+
+        if target_x > ghost_x:
+            self.rect.x += self.speed
+        else:
+            self.rect.x -= self.speed
+        if target_y > ghost_y:
+            self.rect.y += self.speed
+        else:
+            self.rect.y -= self.speed
+
+        self.frame += 1
+        if self.frame > 12:
+            self.frame = 0
+
+        self.image = pygame.transform.scale(GHOST_FRAMES[self.frame], (GHOST_SIZE, GHOST_SIZE))
+        WIN.blit(self.image, (self.rect.x, self.rect.y))
+        pygame.display.update()
+
+
 # DRAWING -------------------------------------------------------------------------------------------
-def draw_level(true_level, display_level, rectangles, ztext):
-    bg = select_background(display_level)
+def draw_level(true_level, display_level, rectangles, ztext, bg):
     WIN.blit(bg, (0, 0))
 
     if display_level == -1:
@@ -130,19 +193,22 @@ def draw_level(true_level, display_level, rectangles, ztext):
 
 
 # SELECT BACKGROUND IMG -------------------------------------------------------------------
-def select_background(level):
+def select_background(level, bg):
     bgs_by_level = {
-        -1: 'intro.jpg',
-        0: 'graveyard_hand.jpg',
         1: 'graveyard1.jpg',
         2: 'graveyard2.jpg',
         3: 'graveyard3.jpg',
         4: 'win.jpg',
         'buffer': 'intro.jpg'
     }
-    bg = pygame.image.load(
-        os.path.join('assets', bgs_by_level[level]))
-    bg_scaled = pygame.transform.scale(bg, (WIDTH, HEIGHT))
+    if bg == 'none':
+        img = pygame.image.load(
+            os.path.join('assets', bgs_by_level[level]))
+        bg_scaled = pygame.transform.scale(img, (WIDTH, HEIGHT))
+    else:
+        img = pygame.image.load(
+            os.path.join('assets', bg))
+        bg_scaled = pygame.transform.scale(img, (WIDTH, HEIGHT))
     return bg_scaled
 
 
@@ -183,6 +249,12 @@ def check_collision(level, switch, rectangles):
             pygame.event.post(pygame.event.Event(LEFT_PATH))
     return
 
+def check_collision_ghost(ghost):
+    mouse = pygame.mouse.get_pos()
+    rect = ghost.rect
+    if rect.collidepoint(mouse):
+        pygame.event.post(pygame.event.Event(GHOSTED))
+    return
 
 # MAIN LOOP -------------------------------------------------------------------------------------------
 def main():
@@ -192,9 +264,11 @@ def main():
     true_level = -1
     display_level = true_level
     rectangles = get_level_rectangles(1)
-    select_background(true_level)
+    bg = select_background(true_level, 'intro.jpg')
     play_bg_music()
     ztext = STEPPED_ON_TEXTS[0]
+    display_ghost = False
+    ghost = Ghost(true_level)
 
     while run:
         clock.tick(FPS)
@@ -208,28 +282,44 @@ def main():
                 true_level = 0
                 display_level = 0
                 start_switch = True
+                display_ghost = False
                 ztext = random.choice(STEPPED_ON_TEXTS)
+                bg = select_background(true_level, 'graveyard_hand.jpg')
+            if event.type == GHOSTED:
+                pygame.mixer.Sound.play(GHOST_LAUGH)
+                true_level = 0
+                display_level = 0
+                start_switch = True
+                display_ghost = False
+                ztext = FONT_2.render('', True, WHITE)
+                bg = select_background(true_level, 'ghosted.jpg')
             if event.type == START_GAME:
                 start_switch = False
+                display_ghost = True
                 if true_level == -1:
                     true_level += 2
                     rectangles = get_level_rectangles(true_level)
                 else:
                     true_level += 1
                     rectangles = get_level_rectangles(true_level)
+                ghost = Ghost(true_level)
                 display_level = true_level
+                bg = select_background(true_level, 'none')
             if event.type == NEXT_LEVEL:
                 display_level = 'buffer'
                 start_switch = True
+                display_ghost = False
                 play_bg_music()
                 if true_level == 3:
                     true_level += 1
                     run = False
         if run:
-            draw_level(true_level, display_level, rectangles, ztext)
+            draw_level(true_level, display_level, rectangles, ztext, bg)
             check_collision(display_level, start_switch, rectangles)
+            if display_ghost:
+                ghost.update()
+                check_collision_ghost(ghost)
 
-    WIN.blit(select_background(true_level), (0, 0))
     pygame.display.update()
     pygame.mixer.Sound.play(WIN_SOUND)
     pygame.time.delay(3000)
