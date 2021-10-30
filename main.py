@@ -9,10 +9,8 @@ WIDTH, HEIGHT = 1500, 800
 WIN = pygame.display.set_mode((WIDTH, HEIGHT))
 pygame.display.set_caption('Graveyard Maze')
 FPS = 15
-SHOW_MOUSECOORDS = False
 BG_MUSIC_VOLUME = 0.1
 GHOST_SIZE = 125
-GHOST_SPEED = 2
 
 # COLORS --------------------------------------------------------------------------------------
 WHITE = (255, 255, 255)
@@ -22,7 +20,7 @@ RED = (255, 0, 0)
 FONT_1 = pygame.font.SysFont('comicsans', int(HEIGHT/25))
 FONT_2 = pygame.font.SysFont('comicsans', int(HEIGHT/15))
 START_TEXT = FONT_1.render("START", True, RED)
-INTRO_TXT = FONT_2.render("Enter the graveyard and stay on the path!", True, WHITE)
+INTRO_TXT = FONT_1.render("Enter the graveyard and stay on the path!", True, WHITE)
 ZOMBIE_TEXTS = [
     'Uuuuuuuuurgh!  Get off me!',
     'Brains!!!!',
@@ -36,23 +34,49 @@ ZOMBIE_TEXTS = [
 STEPPED_ON_TEXTS = [FONT_2.render(x, True, WHITE) for x in ZOMBIE_TEXTS]
 
 # USER EVENTS ---------------------------------------------------------------------------------
-LEFT_PATH = pygame.USEREVENT + 1
-START_GAME = pygame.USEREVENT + 2
-NEXT_LEVEL = pygame.USEREVENT + 3
-GHOSTED = pygame.USEREVENT + 4
+START_LEVEL = pygame.USEREVENT + 1
+LEFT_PATH = pygame.USEREVENT + 2
+GHOSTED = pygame.USEREVENT + 3
+NEXT_LEVEL = pygame.USEREVENT + 4
+WINNER = pygame.USEREVENT + 5
 
-# BACKGROUND MUSIC -----------------------------------------------------------------------------
+# BACKGROUND IMAGES -----------------------------------------------------------------------------
+BG_IMAGES = {
+    'Intro': pygame.image.load(os.path.join('assets', 'intro.jpg')),
+    'Buffer': pygame.image.load(os.path.join('assets', 'intro.jpg')),
+    'Winner': pygame.image.load(os.path.join('assets', 'win.jpg')),
+    'Ghosted': pygame.image.load(os.path.join('assets', 'ghosted.jpg')),
+    'Zombie': pygame.image.load(os.path.join('assets', 'graveyard_hand.jpg')),
+    1: pygame.image.load(os.path.join('assets', 'graveyard1.jpg')),
+    2: pygame.image.load(os.path.join('assets', 'graveyard2.jpg')),
+    3: pygame.image.load(os.path.join('assets', 'graveyard3.jpg'))
+}
+
+BG_IMAGES_SCALED = {
+    'Intro': pygame.transform.scale(BG_IMAGES['Intro'], (WIDTH, HEIGHT)),
+    'Buffer': pygame.transform.scale(BG_IMAGES['Buffer'], (WIDTH, HEIGHT)),
+    'Winner': pygame.transform.scale(BG_IMAGES['Winner'], (WIDTH, HEIGHT)),
+    'Ghosted': pygame.transform.scale(BG_IMAGES['Ghosted'], (WIDTH, HEIGHT)),
+    'Zombie': pygame.transform.scale(BG_IMAGES['Zombie'], (WIDTH, HEIGHT)),
+    1: pygame.transform.scale(BG_IMAGES[1], (WIDTH, HEIGHT)),
+    2: pygame.transform.scale(BG_IMAGES[2], (WIDTH, HEIGHT)),
+    3: pygame.transform.scale(BG_IMAGES[3], (WIDTH, HEIGHT))
+}
 
 # SOUND EFFECTS --------------------------------------------------------------------------------
-ZOMBIE_FILES = [file for file in os.listdir('sound/Sound_Effects')]
-ZOMBIE_SOUNDS = [pygame.mixer.Sound(os.path.join('sound/Sound_Effects', x)) for x in ZOMBIE_FILES]
+ZOMBIE_FILES = ['zombie-1.wav', 'zombie-2.wav', 'zombie-3.wav', 'zombie-4.wav']
+ZOMBIE_SOUNDS = [pygame.mixer.Sound(os.path.join('sound', 'Sound_Effects', x)) for x in ZOMBIE_FILES]
 for sound in ZOMBIE_SOUNDS:
     sound.set_volume(BG_MUSIC_VOLUME)
 
-GHOST_LAUGH = pygame.mixer.Sound(os.path.join('sound/Sound_Effects', 'laugh-evil-1.ogg'))
+GHOST_LAUGH = pygame.mixer.Sound(os.path.join('sound', 'Sound_Effects', 'laugh-evil-1.ogg'))
 
-WIN_SOUND = pygame.mixer.Sound(os.path.join('sound/Sound_Effects', 'win.ogg'))
+WIN_SOUND = pygame.mixer.Sound(os.path.join('sound', 'Sound_Effects', 'win.ogg'))
 WIN_SOUND.set_volume(1)
+
+# GHOST FRAME IMAGES --------------------------------------------------------------------------------
+GHOST_FILES = os.listdir(os.path.join('assets', 'animated ghost'))
+GHOST_FRAMES = [pygame.image.load(os.path.join('assets', 'animated ghost', file)) for file in GHOST_FILES]
 
 
 # LEVEL PATHS -----------------------------------------------------------------------------------
@@ -92,17 +116,9 @@ def get_level_rectangles(level):
         4: []
     }
 
-    rectangles = []
+    rectangles = [pygame.Rect(x[0], x[1], x[2], x[3]) for x in level_definitions[level]]
 
-    for x in level_definitions[level]:
-        path_leg = pygame.Rect(x[0], x[1], x[2], x[3])
-        rectangles.append(path_leg)
     return rectangles
-
-
-# GHOST FRAME IMAGES --------------------------------------------------------------------------------
-GHOST_FILES = os.listdir('assets\\animated ghost')
-GHOST_FRAMES = [pygame.image.load(os.path.join('assets\\animated ghost', file)) for file in GHOST_FILES]
 
 
 # GHOST ---------------------------------------------------------------------------------------------
@@ -111,22 +127,16 @@ class Ghost(pygame.sprite.Sprite):
     def __init__(self, level):
         pygame.sprite.Sprite.__init__(self)
         level_x = {
-            -1: 0,
-            0: 0,
             1: 750,
-            2: 0,
+            2: 500,
             3: 1000
         }
         level_y = {
-            -1: 0,
-            0: 0,
             1: 200,
-            2: 0,
-            3: 1000
+            2: 600,
+            3: 200
         }
         level_speed = {
-            -1: 0,
-            0: 0,
             1: 3,
             2: 1,
             3: 2
@@ -134,7 +144,7 @@ class Ghost(pygame.sprite.Sprite):
 
         self.rect = pygame.Rect(level_x[level], level_y[level], GHOST_SIZE, GHOST_SIZE)
         self.frame = 0
-        self.image = pygame.transform.scale(GHOST_FRAMES[self.frame], (GHOST_SIZE, GHOST_SIZE))
+        self.image = pygame.transform.scale(GHOST_FRAMES[self.frame], self.rect.size)
         self.speed = level_speed[level]
 
     def update(self):
@@ -160,56 +170,59 @@ class Ghost(pygame.sprite.Sprite):
 
 
 # DRAWING -------------------------------------------------------------------------------------------
-def draw_level(true_level, display_level, rectangles, ztext, bg):
-    WIN.blit(bg, (0, 0))
-
-    if display_level == -1:
-        pygame.draw.rect(WIN, RED, rectangles[0])
-        WIN.blit(START_TEXT, (10, 340))
-        WIN.blit(INTRO_TXT, (WIDTH / 2 - INTRO_TXT.get_width() / 2, HEIGHT / 2 - INTRO_TXT.get_width() / 2))
-    elif display_level == 0:
-        pygame.draw.rect(WIN, RED, rectangles[0])
-        WIN.blit(ztext, (WIDTH / 2 - ztext.get_width() / 2, HEIGHT / 2 - ztext.get_height() / 2))
-    elif display_level == 'buffer':
-        pygame.draw.rect(WIN, RED, rectangles[0])
-        WIN.blit(START_TEXT, (10, 340))
-        level_text = FONT_2.render(f"LEVEL {true_level+1}", True, WHITE)
-        WIN.blit(level_text, (WIDTH/2 - level_text.get_width()/2, HEIGHT/2 - level_text.get_height()/2))
-    else:
-        level_text = FONT_2.render(f"LEVEL {display_level}", True, WHITE)
-        WIN.blit(level_text, (1490 - level_text.get_width(), 10))
-        for rect in rectangles:
-            pygame.draw.rect(WIN, WHITE, rect)
-        pygame.draw.rect(WIN, RED, rectangles[0])
-        pygame.draw.rect(WIN, RED, rectangles[-1])
-
-    if SHOW_MOUSECOORDS:
-        mouse_x, mouse_y = pygame.mouse.get_pos()
-        coords = FONT_1.render(f'Mouse Position = {mouse_x}, {mouse_y}', True, WHITE)
-        WIN.blit(coords, (10, 10))
-
+def draw_intro():
+    WIN.blit(BG_IMAGES_SCALED['Intro'], (0, 0))
+    start_rect = pygame.Rect((10, 370, 80, 80))
+    pygame.draw.rect(WIN, RED, start_rect)
+    WIN.blit(START_TEXT, (10, 310))
+    WIN.blit(INTRO_TXT, (WIDTH / 2 - INTRO_TXT.get_width() / 2, HEIGHT / 2 - INTRO_TXT.get_width() / 2))
     pygame.display.update()
     return
 
 
-# SELECT BACKGROUND IMG -------------------------------------------------------------------
-def select_background(level, bg):
-    bgs_by_level = {
-        1: 'graveyard1.jpg',
-        2: 'graveyard2.jpg',
-        3: 'graveyard3.jpg',
-        4: 'win.jpg',
-        'buffer': 'intro.jpg'
-    }
-    if bg == 'none':
-        img = pygame.image.load(
-            os.path.join('assets', bgs_by_level[level]))
-        bg_scaled = pygame.transform.scale(img, (WIDTH, HEIGHT))
-    else:
-        img = pygame.image.load(
-            os.path.join('assets', bg))
-        bg_scaled = pygame.transform.scale(img, (WIDTH, HEIGHT))
-    return bg_scaled
+def draw_level(level, rectangles):
+    WIN.blit(BG_IMAGES_SCALED[level], (0, 0))
+    level_text = FONT_2.render(f"LEVEL {level}", True, WHITE)
+    WIN.blit(level_text, (1490 - level_text.get_width(), 10))
+    for rect in rectangles:
+        pygame.draw.rect(WIN, WHITE, rect)
+    pygame.draw.rect(WIN, RED, rectangles[0])
+    pygame.draw.rect(WIN, RED, rectangles[-1])
+    pygame.display.update()
+    return
+
+
+def draw_left_path(ztext):
+    WIN.blit(BG_IMAGES_SCALED['Zombie'], (0, 0))
+    start_rect = pygame.Rect((10, 370, 80, 80))
+    pygame.draw.rect(WIN, RED, start_rect)
+    WIN.blit(ztext, (WIDTH / 2 - ztext.get_width() / 2, HEIGHT / 2 - ztext.get_height() / 2))
+    pygame.display.update()
+    return
+
+
+def draw_ghosted():
+    WIN.blit(BG_IMAGES_SCALED['Ghosted'], (0, 0))
+    start_rect = pygame.Rect((10, 370, 80, 80))
+    pygame.draw.rect(WIN, RED, start_rect)
+    pygame.display.update()
+    return
+
+
+def draw_buffer(level):
+    WIN.blit(BG_IMAGES_SCALED['Buffer'], (0, 0))
+    start_rect = pygame.Rect((10, 370, 80, 80))
+    pygame.draw.rect(WIN, RED, start_rect)
+    level_text = FONT_2.render(f"LEVEL {level}", True, WHITE)
+    WIN.blit(level_text, (WIDTH / 2 - level_text.get_width() / 2, HEIGHT / 2 - level_text.get_height() / 2))
+    pygame.display.update()
+    return
+
+
+def draw_winner():
+    WIN.blit(BG_IMAGES_SCALED['Winner'], (0, 0))
+    pygame.display.update()
+    return
 
 
 # SELECT BACKGROUND MUSIC ---------------------------------------------------------------------------
@@ -229,100 +242,111 @@ def play_bg_music():
 
 
 # CHECK COLLISION -----------------------------------------------------------------------------------
-def check_collision(level, switch, rectangles):
+def check_collision_start():
+    start_rect = pygame.Rect((10, 370, 80, 80))
     mouse = pygame.mouse.get_pos()
-    if level == 'buffer' or level <= 0:
-        if switch:
-            rect = rectangles[0]
-            if rect.collidepoint(mouse):
-                pygame.event.post(pygame.event.Event(START_GAME))
-    else:
-        rect = rectangles[-1]
-        if rect.collidepoint(mouse):
-            pygame.event.post(pygame.event.Event(NEXT_LEVEL))
-            return
-        safe = False
-        for rect in rectangles:
-            if rect.collidepoint(mouse):
-                safe = True
-        if not safe:
-            pygame.event.post(pygame.event.Event(LEFT_PATH))
+    if start_rect.collidepoint(mouse):
+        pygame.event.post(pygame.event.Event(START_LEVEL))
     return
+
+
+def check_collision_next_level(level, rectangles):
+    end_rect = rectangles[-1]
+    mouse = pygame.mouse.get_pos()
+    if end_rect.collidepoint(mouse):
+        if level == 3:
+            pygame.event.post(pygame.event.Event(WINNER))
+        else:
+            pygame.event.post(pygame.event.Event(NEXT_LEVEL))
+    return
+
+
+def check_collision(rectangles):
+    mouse = pygame.mouse.get_pos()
+
+    safe = False
+    for rect in rectangles:
+        if rect.collidepoint(mouse):
+            safe = True
+    if not safe:
+        pygame.event.post(pygame.event.Event(LEFT_PATH))
+    return
+
 
 def check_collision_ghost(ghost):
     mouse = pygame.mouse.get_pos()
-    rect = ghost.rect
-    if rect.collidepoint(mouse):
+    ghost_rect = ghost.rect
+    if ghost_rect.collidepoint(mouse):
         pygame.event.post(pygame.event.Event(GHOSTED))
     return
+
 
 # MAIN LOOP -------------------------------------------------------------------------------------------
 def main():
     clock = pygame.time.Clock()
     run = True
-    start_switch = True
-    true_level = -1
-    display_level = true_level
-    rectangles = get_level_rectangles(1)
-    bg = select_background(true_level, 'intro.jpg')
+    level = 1
+    game_state = 'Intro'
     play_bg_music()
-    ztext = STEPPED_ON_TEXTS[0]
-    display_ghost = False
-    ghost = Ghost(true_level)
 
     while run:
         clock.tick(FPS)
 
         for event in pygame.event.get():
+
             if event.type == pygame.QUIT:
                 run = False
                 pygame.quit()
-            if event.type == LEFT_PATH:
-                pygame.mixer.Sound.play(random.choice(ZOMBIE_SOUNDS))
-                true_level = 0
-                display_level = 0
-                start_switch = True
-                display_ghost = False
-                ztext = random.choice(STEPPED_ON_TEXTS)
-                bg = select_background(true_level, 'graveyard_hand.jpg')
-            if event.type == GHOSTED:
-                pygame.mixer.Sound.play(GHOST_LAUGH)
-                true_level = 0
-                display_level = 0
-                start_switch = True
-                display_ghost = False
-                ztext = FONT_2.render('', True, WHITE)
-                bg = select_background(true_level, 'ghosted.jpg')
-            if event.type == START_GAME:
-                start_switch = False
-                display_ghost = True
-                if true_level == -1:
-                    true_level += 2
-                    rectangles = get_level_rectangles(true_level)
-                else:
-                    true_level += 1
-                    rectangles = get_level_rectangles(true_level)
-                ghost = Ghost(true_level)
-                display_level = true_level
-                bg = select_background(true_level, 'none')
-            if event.type == NEXT_LEVEL:
-                display_level = 'buffer'
-                start_switch = True
-                display_ghost = False
-                play_bg_music()
-                if true_level == 3:
-                    true_level += 1
-                    run = False
-        if run:
-            draw_level(true_level, display_level, rectangles, ztext, bg)
-            check_collision(display_level, start_switch, rectangles)
-            if display_ghost:
-                ghost.update()
-                check_collision_ghost(ghost)
 
-    pygame.display.update()
-    pygame.mixer.Sound.play(WIN_SOUND)
-    pygame.time.delay(3000)
+            if event.type == START_LEVEL:
+                ghost = Ghost(level)
+                rectangles = get_level_rectangles(level)
+                game_state = 'Level'
+
+            if event.type == LEFT_PATH:
+                game_state = 'Zombie'
+                pygame.mixer.Sound.play(random.choice(ZOMBIE_SOUNDS))
+                ztext = random.choice(STEPPED_ON_TEXTS)
+
+            if event.type == GHOSTED:
+                game_state = 'Ghosted'
+                pygame.mixer.Sound.play(GHOST_LAUGH)
+
+            if event.type == NEXT_LEVEL:
+                level += 1
+                game_state = 'Buffer'
+                play_bg_music()
+
+            if event.type == WINNER:
+                game_state = 'Won'
+                draw_winner()
+                pygame.mixer.Sound.play(WIN_SOUND)
+                pygame.time.delay(3000)
+                run = False
+
+        if game_state == 'Intro':
+            draw_intro()
+            check_collision_start()
+
+        if game_state == 'Zombie':
+            draw_left_path(ztext)
+            check_collision_start()
+
+        if game_state == 'Ghosted':
+            draw_ghosted()
+            check_collision_start()
+
+        if game_state == 'Buffer':
+            draw_buffer(level)
+            check_collision_start()
+
+        if game_state == 'Level':
+            draw_level(level, rectangles)
+            check_collision(rectangles)
+            check_collision_next_level(level, rectangles)
+            ghost.update()
+            check_collision_ghost(ghost)
+
     main()
     return
 
